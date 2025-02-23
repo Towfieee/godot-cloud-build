@@ -1,0 +1,84 @@
+logsBucket: 'gs://game-artifacts/logs/'
+
+substitutions:
+  _BUILD_IMAGE: 'gcr.io/your-project-name/godot-headless'
+  _GODOT_VERSION: '4.3'
+  _RELEASE_NAME: 'stable'
+  _GODOT_TEST_ARGS: ''
+  _EXPORT_NAME: 'game-name'
+
+steps:
+  # Step 1: Use a prebuilt image to handle all actions
+  - id: 'Prepare Project Environment'
+    name: '${_BUILD_IMAGE}:${_GODOT_VERSION}'
+    entrypoint: '/bin/bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        /scripts/setup_environment.sh
+        /scripts/download_dependencies.sh
+        /scripts/add_configuration_files.sh
+        /scripts/run_tests.sh
+
+  # Step 2: Windows game build (example below)
+  - id: 'Windows Game Build'
+    name: '${_BUILD_IMAGE}:${_GODOT_VERSION}'
+    entrypoint: '/bin/bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        mkdir -p build/windows &&
+        ~/godot_server/godot.linuxbsd.${_GODOT_VERSION}_${_RELEASE_NAME}_mono_release.x86_64 --headless -v --export-debug "Windows Export" "build/windows/${_EXPORT_NAME}.exe"
+
+
+  # Step 9: Build for Linux
+  - id: 'Linux Game Build'
+    name: '${_BUILD_IMAGE}:${_GODOT_VERSION}'
+    entrypoint: '/bin/bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        mkdir -p build/linux &&
+        ~/godot_server/godot.linuxbsd.${_GODOT_VERSION}_${_RELEASE_NAME}_mono_release.x86_64 --headless -v --export-debug "Linux Export" "build/linux/${_EXPORT_NAME}.x86_64"
+
+  # Step 10: Build for Mac
+  - id: 'Mac Game Build'
+    name: '${_BUILD_IMAGE}:${_GODOT_VERSION}'
+    entrypoint: '/bin/bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        mkdir -p build/mac &&
+        ~/godot_server/godot.linuxbsd.${_GODOT_VERSION}_${_RELEASE_NAME}_mono_release.x86_64 --headless -v --export-debug "Mac Export" "build/mac/${_EXPORT_NAME}.zip"
+
+  # Step 11: Upload Windows artifact to Cloud Storage
+  - id: 'Windows Game Artifact Export'
+    name: 'gcr.io/cloud-builders/gsutil'
+    waitFor: ['Windows Game Build']
+    args:
+      - 'cp'
+      - 'build/windows/${_EXPORT_NAME}.exe'
+      - 'gs://game-artifacts/windows/${_EXPORT_NAME}.exe'
+
+  # Step 12: Upload Linux artifact to Cloud Storage
+  - id: 'Linux Game Artifact Export'
+    name: 'gcr.io/cloud-builders/gsutil'
+    waitFor: ['Linux Game Build']
+    args:
+      - 'cp'
+      - 'build/linux/${_EXPORT_NAME}.x86_64'
+      - 'gs://game-artifacts/linux/${_EXPORT_NAME}.x86_64'
+
+  # Step 13: Upload Mac artifact to Cloud Storage
+  - id: 'Mac Game Artifact Export'
+    name: 'gcr.io/cloud-builders/gsutil'
+    waitFor: ['Mac Game Build']
+    args:
+      - 'cp'
+      - 'build/mac/${_EXPORT_NAME}.zip'
+      - 'gs://game-artifacts/mac/${_EXPORT_NAME}.zip'
+
