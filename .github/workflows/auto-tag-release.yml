@@ -1,0 +1,37 @@
+name: Create Release Tag
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Extract Latest Tag
+        id: get-latest-tag
+        run: |
+          latest=$(git describe --tags $(git rev-list --tags --max-count=1))
+          echo "::set-output name=latest::$latest"
+
+      - name: Increment the Minor Version
+        id: increment-version
+        run: |
+          major=$(echo ${{ steps.get-latest-tag.outputs.latest }} | cut -d '.' -f 1 | cut -c2-)
+          minor=$(echo ${{ steps.get-latest-tag.outputs.latest }} | cut -d '.' -f 2)
+          patch=$(echo ${{ steps.get-latest-tag.outputs.latest }} | cut -d '.' -f 3)
+          minor=$((minor + 1))
+          new_version=v$major.$minor.0
+          echo "new_version=$new_version"
+          echo "::set-output name=version::$new_version"
+
+      - name: Tag Release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.increment-version.outputs.version }}
+          git push origin ${{ steps.increment-version.outputs.version }}
